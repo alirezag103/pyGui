@@ -3,6 +3,7 @@ import numpy as np
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -38,17 +39,19 @@ class ChartWidget(QWidget):
         self.figure = Figure(figsize=(5, 4), dpi=100)
         self.canvas = FigureCanvasQTAgg(self.figure)
         layout = QVBoxLayout()
+        toolbar = NavigationToolbar2QT(self.canvas, self)
+        layout.addWidget(toolbar)
         layout.addWidget(self.canvas)
         self.setLayout(layout)
-        self.axis = self.figure.add_subplot(111)
+        self.axes = self.figure.add_subplot(111)
 
     def plot_data(self, x_data, y_data, title, x_label, y_label, color='blue'):
-        self.axis.clear()
-        self.axis.plot(x_data, y_data, color=color)
-        self.axis.set_title(title)
-        self.axis.set_xlabel(x_label)
-        self.axis.set_ylabel(y_label)
-        self.axis.grid(True, linestyle='--', alpha=0.6)
+        self.axes.clear()
+        self.axes.plot(x_data, y_data, color=color)
+        self.axes.set_title(title)
+        self.axes.set_xlabel(x_label)
+        self.axes.set_ylabel(y_label)
+        self.axes.grid(True, linestyle='--', alpha=0.6)
         self.canvas.draw()
 
 
