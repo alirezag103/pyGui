@@ -1,0 +1,18 @@
+[project]
+name = "pygui"
+version = "0.1.0"
+description = "Simple python GUI using pyQt6"
+authors = [
+    {name = "alireza",email = "164399453+alirezag103@users.noreply.github.com"}
+]
+requires-python = ">=3.13"
+dependencies = [
+    "pyqt6 (>=6.11.0,<7.0.0)",
+    "matplotlib (>=3.10.9,<4.0.0)",
+    "numpy (>=2.4.6,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
