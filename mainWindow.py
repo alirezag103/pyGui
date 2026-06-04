@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget
+from PyQt6.QtCore import QTimer, QDateTime
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
@@ -10,6 +11,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('Chart GUI Application')
         self.setGeometry(100, 100, 800, 600)
+        
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_tab1)
+        self.start_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
+
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
@@ -19,13 +25,25 @@ class MainWindow(QMainWindow):
         self.tab2_chart = ChartWidget()
         self.tabs.addTab(self.tab1_chart, "Line Plot")
         self.tabs.addTab(self.tab2_chart, "Scatter Plot")
+        
+        self.time_list = []
+        self.y_list = []
+        self.max_points = 100
+        self.timer.start(10)
         self.update_tab1()
         self.update_tab2()
 
     def update_tab1(self):
-        x = np.linspace(0, 4*np.pi, 100)
-        y = np.sin(x)
-        self.tab1_chart.plot_data(x, y, "Sin Wave", "X-axis (radians)", "Y-axis (sin value)", color='green')
+        current_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
+        elapsed_time = current_time - self.start_time
+        frequency = 1.0
+        y = np.sin(2*np.pi*frequency*elapsed_time)
+        if len(self.time_list) >= self.max_points:
+            self.time_list.pop(0)
+            self.y_list.pop(0)
+        self.time_list.append(elapsed_time)
+        self.y_list.append(y)
+        self.tab1_chart.plot_data(self.time_list, self.y_list, "Sin Wave", "X-axis (radians)", "Y-axis (sin value)", color='green')
 
     def update_tab2(self):
         x = np.random.rand(50)
