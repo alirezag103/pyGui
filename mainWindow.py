@@ -16,7 +16,7 @@ class MainWindow(QMainWindow):
         self.wave_range = 1.0
         
         self.timer = QTimer()
-        self.timer.timeout.connect(self.update_sin)
+        self.timer.timeout.connect(self.update_time_domain)
         self.start_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
 
         central_widget = QWidget()
@@ -27,10 +27,11 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
         self.sin_chart = ChartWidget("Time Domain", "Time (Seconds)", "Amplitude")
-        self.freq_chart = ChartWidget("Frequency Domain", "Time (Seconds)", "Amplitude")
+        self.freq_chart = ChartWidget("Frequency Domain", "Frequency (Hz)", "Magnitude")
         self.tabs.addTab(self.sin_chart, "Time Domain (Sine Wave) Plot")
         self.tabs.addTab(self.freq_chart, "Frequency Domain (FFT) Plot")
         
+        # Initializing Signal
         self.time_list = []
         self.y_list = []
         self.max_points = 200
@@ -67,8 +68,7 @@ class MainWindow(QMainWindow):
                                  "Frequency (Hz)", "Magnitude", 
                                  peak_freq, peak_magnitude)
 
-
-    def update_sin(self):
+    def update_time_domain(self):
         current_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
         elapsed_time = current_time - self.start_time
         y = self.wave_range * np.sin(2*np.pi*self.frequency*elapsed_time)
@@ -80,17 +80,13 @@ class MainWindow(QMainWindow):
         self.sin_chart.plot_data(self.time_list, self.y_list, color='green')
         self.update_frequency_domain()
 
-    # def update_tab2(self):
-    #     x = np.random.rand(50)
-    #     y = np.random.rand(50)
-    #     self.freq_chart.plot_data(x, y, color='black')
-
     def create_control_panel(self):
         control_group = QGroupBox("Signal Control Panel")
         cpanel_layout = QVBoxLayout()
         range_layout = QHBoxLayout()
         freq_layout = QHBoxLayout()
 
+        # Range Control section
         range_layout.addWidget(QLabel("Range :"))
         self.range_spinbox = QDoubleSpinBox()
         self.range_spinbox.setRange(0.0, 10.0)
@@ -103,6 +99,7 @@ class MainWindow(QMainWindow):
         range_layout.addStretch()
         cpanel_layout.addLayout(range_layout)
         
+        # Frequency Control section
         freq_layout.addWidget(QLabel("Frequency (Hz):"))
         self.freq_spinbox = QDoubleSpinBox()
         self.freq_spinbox.setRange(0.1, 10.0)
@@ -116,6 +113,7 @@ class MainWindow(QMainWindow):
         freq_layout.addStretch()
         cpanel_layout.addLayout(freq_layout)
 
+        # Other Controls
         button_layout = QHBoxLayout()
         reset_btn = QPushButton("Reset View")
         reset_btn.clicked.connect(self.reset_chart_view)
@@ -123,7 +121,6 @@ class MainWindow(QMainWindow):
         clear_btn = QPushButton("Clear Data")
         clear_btn.clicked.connect(self.clear_data)
         button_layout.addWidget(clear_btn)
-        
         button_layout.addStretch()
         cpanel_layout.addLayout(button_layout)
         
@@ -156,7 +153,6 @@ class MainWindow(QMainWindow):
         self.freq_chart.plot_fft([], [], "Frequency Domain - Cleared", 
                                  "Frequency (Hz)", "Magnitude", 0, 0)
 
-
 class ChartWidget(QWidget):
     def __init__(self, title, x_label, y_label, parent=None):
         super().__init__(parent)
@@ -172,12 +168,23 @@ class ChartWidget(QWidget):
         self.axes.set_xlabel(x_label)
         self.axes.set_ylabel(y_label)
 
+    # Time Domain plot draw
     def plot_data(self, x_data, y_data, color='blue'):
         self.axes.clear()
-        self.axes.plot(x_data, y_data, color=color)
+        if x_data and y_data:
+            self.axes.plot(x_data, y_data, color=color)
+            y_min, y_max = min(y_data), max(y_data)
+            y_padding = (y_max - y_min) * 0.1 if y_max != y_min else 0.1
+            self.axes.set_ylim(y_min - y_padding, y_max + y_padding)
+            if len(x_data) > 1:
+                self.axes.set_xlim(max(0, x_data[-1] - 8), x_data[-1])
+        else:
+            self.axes.set_xlim(0, 10)
+            self.axes.set_ylim(-2, 2)
         self.axes.grid(True, linestyle='--', alpha=0.6)
         self.canvas.draw_idle()
 
+    # Frequency Domain plot draw
     def plot_fft(self, freq_data, magnitude_data, title, x_label, y_label, 
                  peak_freq=0, peak_magnitude=0):
         self.axes.clear()
