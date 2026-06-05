@@ -62,7 +62,6 @@ class MainWindow(QMainWindow):
             peak_freq = 0
             peak_magnitude = 0
         
-        # Update frequency domain plot
         title = f"Frequency Domain - FFT (Peak at {peak_freq:.2f} Hz)"
         self.freq_chart.plot_fft(freq_axis, fft_abs, title, 
                                  "Frequency (Hz)", "Magnitude", 
@@ -117,11 +116,16 @@ class MainWindow(QMainWindow):
         freq_layout.addStretch()
         cpanel_layout.addLayout(freq_layout)
 
-
-        
+        button_layout = QHBoxLayout()
         reset_btn = QPushButton("Reset View")
         reset_btn.clicked.connect(self.reset_chart_view)
-        cpanel_layout.addWidget(reset_btn)
+        button_layout.addWidget(reset_btn)
+        clear_btn = QPushButton("Clear Data")
+        clear_btn.clicked.connect(self.clear_data)
+        button_layout.addWidget(clear_btn)
+        
+        button_layout.addStretch()
+        cpanel_layout.addLayout(button_layout)
         
         control_group.setLayout(cpanel_layout)
         return control_group
@@ -143,6 +147,15 @@ class MainWindow(QMainWindow):
     def reset_chart_view(self):
         self.sin_chart.reset_view()
         self.freq_chart.reset_view()
+
+    def clear_data(self):
+        self.time_list.clear()
+        self.y_list.clear()
+        self.start_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
+        self.sin_chart.plot_data([], [], color='green')
+        self.freq_chart.plot_fft([], [], "Frequency Domain - Cleared", 
+                                 "Frequency (Hz)", "Magnitude", 0, 0)
+
 
 class ChartWidget(QWidget):
     def __init__(self, title, x_label, y_label, parent=None):
@@ -167,21 +180,17 @@ class ChartWidget(QWidget):
 
     def plot_fft(self, freq_data, magnitude_data, title, x_label, y_label, 
                  peak_freq=0, peak_magnitude=0):
-        """Plot frequency domain data (FFT)"""
         self.axes.clear()
         
         if len(freq_data) > 0 and len(magnitude_data) > 0:
-            # Plot the FFT as stems (bar chart style) for better visualization
             self.axes.stem(freq_data, magnitude_data, linefmt='r-', 
                           markerfmt='ro', basefmt='k-')
             
-            # Highlight the peak frequency
             if peak_freq > 0 and peak_magnitude > 0:
                 self.axes.plot(peak_freq, peak_magnitude, 'bo', markersize=10, 
                               label=f'Peak: {peak_freq:.2f} Hz')
                 self.axes.legend()
             
-            # Set limits
             self.axes.set_xlim(0, max(10, max(freq_data)))
             self.axes.set_ylim(0, max(magnitude_data) * 1.1)
         else:
@@ -189,6 +198,9 @@ class ChartWidget(QWidget):
             self.axes.set_ylim(0, 1)
             self.axes.text(5, 0.5, 'Waiting for data...', 
                           horizontalalignment='center', verticalalignment='center')
+        self.axes.set_title(title)
+        self.axes.set_xlabel(x_label)
+        self.axes.set_ylabel(y_label)
         self.axes.grid(True, linestyle='--', alpha=0.6)
         self.canvas.draw_idle()
             
