@@ -11,7 +11,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('Chart GUI Application')
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 900, 700)
         self.frequency = 1.0
         self.wave_range = 1.0
         
@@ -27,15 +27,47 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
         self.sin_chart = ChartWidget("Time Domain", "Time (Seconds)", "Amplitude")
-        self.tab2_chart = ChartWidget("Frequency Domain", "Time (Seconds)", "Amplitude")
+        self.freq_chart = ChartWidget("Frequency Domain", "Time (Seconds)", "Amplitude")
         self.tabs.addTab(self.sin_chart, "Time Domain (Sine Wave) Plot")
-        self.tabs.addTab(self.tab2_chart, "Frequency Domain (FFT) Plot")
+        self.tabs.addTab(self.freq_chart, "Frequency Domain (FFT) Plot")
         
         self.time_list = []
         self.y_list = []
-        self.max_points = 100
+        self.max_points = 200
+        self.sampling_rate = 100
         self.timer.start(10)
-        self.update_tab2()
+        self.update_frequency_domain()
+
+    def update_frequency_domain(self):
+        if len(self.y_list) < 10:
+            return
+        y_data = np.array(self.y_list)
+        n = len(y_data)
+        window = np.hanning(n)
+        y_windowed = y_data * window
+        fft_vals = np.fft.fft(y_windowed)
+        fft_abs = np.abs(fft_vals[:n//2])
+        fft_abs = fft_abs / (n/2)
+
+        freq_axis = np.fft.fftfreq(n, 1/self.sampling_rate)[:n//2]
+        max_freq = min(20, self.sampling_rate/2)
+        mask = freq_axis <= max_freq
+        freq_axis = freq_axis[mask]
+        fft_abs = fft_abs[mask]
+        
+        if len(fft_abs) > 0:
+            peak_freq = freq_axis[np.argmax(fft_abs)]
+            peak_magnitude = np.max(fft_abs)
+        else:
+            peak_freq = 0
+            peak_magnitude = 0
+        
+        # Update frequency domain plot
+        title = f"Frequency Domain - FFT (Peak at {peak_freq:.2f} Hz)"
+        self.freq_chart.plot_fft(freq_axis, fft_abs, title, 
+                                 "Frequency (Hz)", "Magnitude", 
+                                 peak_freq, peak_magnitude)
+
 
     def update_sin(self):
         current_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
@@ -47,11 +79,12 @@ class MainWindow(QMainWindow):
         self.time_list.append(elapsed_time)
         self.y_list.append(y)
         self.sin_chart.plot_data(self.time_list, self.y_list, color='green')
+        self.update_frequency_domain()
 
-    def update_tab2(self):
-        x = np.random.rand(50)
-        y = np.random.rand(50)
-        self.tab2_chart.plot_data(x, y, color='black')
+    # def update_tab2(self):
+    #     x = np.random.rand(50)
+    #     y = np.random.rand(50)
+    #     self.freq_chart.plot_data(x, y, color='black')
 
     def create_control_panel(self):
         control_group = QGroupBox("Signal Control Panel")
@@ -109,7 +142,7 @@ class MainWindow(QMainWindow):
 
     def reset_chart_view(self):
         self.sin_chart.reset_view()
-        self.tab2_chart.reset_view()
+        self.freq_chart.reset_view()
 
 class ChartWidget(QWidget):
     def __init__(self, title, x_label, y_label, parent=None):
@@ -131,6 +164,34 @@ class ChartWidget(QWidget):
         self.axes.plot(x_data, y_data, color=color)
         self.axes.grid(True, linestyle='--', alpha=0.6)
         self.canvas.draw_idle()
+
+    def plot_fft(self, freq_data, magnitude_data, title, x_label, y_label, 
+                 peak_freq=0, peak_magnitude=0):
+        """Plot frequency domain data (FFT)"""
+        self.axes.clear()
+        
+        if len(freq_data) > 0 and len(magnitude_data) > 0:
+            # Plot the FFT as stems (bar chart style) for better visualization
+            self.axes.stem(freq_data, magnitude_data, linefmt='r-', 
+                          markerfmt='ro', basefmt='k-')
+            
+            # Highlight the peak frequency
+            if peak_freq > 0 and peak_magnitude > 0:
+                self.axes.plot(peak_freq, peak_magnitude, 'bo', markersize=10, 
+                              label=f'Peak: {peak_freq:.2f} Hz')
+                self.axes.legend()
+            
+            # Set limits
+            self.axes.set_xlim(0, max(10, max(freq_data)))
+            self.axes.set_ylim(0, max(magnitude_data) * 1.1)
+        else:
+            self.axes.set_xlim(0, 10)
+            self.axes.set_ylim(0, 1)
+            self.axes.text(5, 0.5, 'Waiting for data...', 
+                          horizontalalignment='center', verticalalignment='center')
+        self.axes.grid(True, linestyle='--', alpha=0.6)
+        self.canvas.draw_idle()
+            
     def reset_view(self):
         self.axes.autoscale()
         self.canvas.draw_idle()
