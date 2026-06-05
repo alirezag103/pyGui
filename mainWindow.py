@@ -26,10 +26,10 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(control_panel)
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
-        self.sin_chart = ChartWidget()
-        self.tab2_chart = ChartWidget()
-        self.tabs.addTab(self.sin_chart, "Sin Wave Plot")
-        self.tabs.addTab(self.tab2_chart, "Scatter Plot")
+        self.sin_chart = ChartWidget("Time Domain", "Time (Seconds)", "Amplitude")
+        self.tab2_chart = ChartWidget("Frequency Domain", "Time (Seconds)", "Amplitude")
+        self.tabs.addTab(self.sin_chart, "Time Domain (Sine Wave) Plot")
+        self.tabs.addTab(self.tab2_chart, "Frequency Domain (FFT) Plot")
         
         self.time_list = []
         self.y_list = []
@@ -46,12 +46,12 @@ class MainWindow(QMainWindow):
             self.y_list.pop(0)
         self.time_list.append(elapsed_time)
         self.y_list.append(y)
-        self.sin_chart.plot_data(self.time_list, self.y_list, "Sin Wave", "X-axis (radians)", "Y-axis (sin value)", color='green')
+        self.sin_chart.plot_data(self.time_list, self.y_list, color='green')
 
     def update_tab2(self):
         x = np.random.rand(50)
         y = np.random.rand(50)
-        self.tab2_chart.plot_data(x, y, "Scatter Plot", "X-axis", "Y-axis", color='black')
+        self.tab2_chart.plot_data(x, y, color='black')
 
     def create_control_panel(self):
         control_group = QGroupBox("Signal Control Panel")
@@ -112,7 +112,7 @@ class MainWindow(QMainWindow):
         self.tab2_chart.reset_view()
 
 class ChartWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, title, x_label, y_label, parent=None):
         super().__init__(parent)
         self.figure = Figure(figsize=(5, 4), dpi=100)
         self.canvas = FigureCanvasQTAgg(self.figure)
@@ -122,13 +122,13 @@ class ChartWidget(QWidget):
         layout.addWidget(self.canvas)
         self.setLayout(layout)
         self.axes = self.figure.add_subplot(111)
-
-    def plot_data(self, x_data, y_data, title, x_label, y_label, color='blue'):
-        self.axes.clear()
-        self.axes.plot(x_data, y_data, color=color)
         self.axes.set_title(title)
         self.axes.set_xlabel(x_label)
         self.axes.set_ylabel(y_label)
+
+    def plot_data(self, x_data, y_data, color='blue'):
+        self.axes.clear()
+        self.axes.plot(x_data, y_data, color=color)
         self.axes.grid(True, linestyle='--', alpha=0.6)
         self.canvas.draw_idle()
     def reset_view(self):
