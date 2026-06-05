@@ -13,7 +13,7 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 800, 600)
         
         self.timer = QTimer()
-        self.timer.timeout.connect(self.update_tab1)
+        self.timer.timeout.connect(self.update_sin)
         self.start_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
 
         central_widget = QWidget()
@@ -21,19 +21,19 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
-        self.tab1_chart = ChartWidget()
+        self.sin_chart = ChartWidget()
         self.tab2_chart = ChartWidget()
-        self.tabs.addTab(self.tab1_chart, "Line Plot")
+        self.tabs.addTab(self.sin_chart, "Sin Wave Plot")
         self.tabs.addTab(self.tab2_chart, "Scatter Plot")
         
         self.time_list = []
         self.y_list = []
         self.max_points = 100
         self.timer.start(10)
-        self.update_tab1()
+        # self.update_sin()
         self.update_tab2()
 
-    def update_tab1(self):
+    def update_sin(self):
         current_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
         elapsed_time = current_time - self.start_time
         frequency = 1.0
@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
             self.y_list.pop(0)
         self.time_list.append(elapsed_time)
         self.y_list.append(y)
-        self.tab1_chart.plot_data(self.time_list, self.y_list, "Sin Wave", "X-axis (radians)", "Y-axis (sin value)", color='green')
+        self.sin_chart.plot_data(self.time_list, self.y_list, "Sin Wave", "X-axis (radians)", "Y-axis (sin value)", color='green')
 
     def update_tab2(self):
         x = np.random.rand(50)
@@ -70,7 +70,7 @@ class ChartWidget(QWidget):
         self.axes.set_xlabel(x_label)
         self.axes.set_ylabel(y_label)
         self.axes.grid(True, linestyle='--', alpha=0.6)
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
 
 if __name__ == "__main__":
