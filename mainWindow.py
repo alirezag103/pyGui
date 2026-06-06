@@ -1,12 +1,44 @@
 import sys
 import numpy as np
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget,
-                              QGroupBox, QHBoxLayout, QLabel, QDoubleSpinBox, QPushButton)
-from PyQt6.QtCore import QTimer, QDateTime, Qt
+                              QGroupBox, QHBoxLayout, QLabel, QDoubleSpinBox, QPushButton,
+                              QFileDialog, QMessageBox)
+from PyQt6.QtCore import QTimer, QDateTime, QThread, pyqtSignal
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
+import json
+import os
 
+class PlaybackThread(QThread):
+    data_chunk = pyqtSignal(float, float)
+    
+    def __init__(self, times, values):
+        super().__init__()
+        self.times = times
+        self.values = values
+        self.is_playing = True
+        self.current_index = 0
+        self.start_time = None
+        
+    def run(self):
+        self.start_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
+        while self.is_playing and self.current_index < len(self.times):
+            current_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
+            elapsed = current_time - self.start_time
+            
+            # Find all points that should be displayed up to this time
+            while (self.current_index < len(self.times) and 
+                   self.times[self.current_index] <= elapsed):
+                self.data_chunk.emit(self.times[self.current_index], 
+                                    self.values[self.current_index])
+                self.current_index += 1
+            
+            self.msleep(10)
+    
+    def stop(self):
+        self.is_playing = False
+        
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -14,7 +46,12 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 900, 700)
         self.frequency = 1.0
         self.wave_range = 1.0
-        
+
+        self.is_recording = False
+        self.is_playing_back = False
+        self.recorded_times = []
+        self.recorded_values = []
+        self.playback_thread = None
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_time_domain)
         self.start_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
@@ -69,9 +106,14 @@ class MainWindow(QMainWindow):
                                  peak_freq, peak_magnitude)
 
     def update_time_domain(self):
+        if self.is_playing_back:
+            return
         current_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
         elapsed_time = current_time - self.start_time
         y = self.wave_range * np.sin(2*np.pi*self.frequency*elapsed_time)
+        if self.is_recording:
+            self.recorded_times.append(elapsed_time)
+            self.recorded_values.append(y)
         if len(self.time_list) >= self.max_points:
             self.time_list.pop(0)
             self.y_list.pop(0)
@@ -85,8 +127,9 @@ class MainWindow(QMainWindow):
         cpanel_layout = QVBoxLayout()
         range_layout = QHBoxLayout()
         freq_layout = QHBoxLayout()
+        record_layout = QHBoxLayout()
 
-        # Range Control section
+        # Range Controls
         range_layout.addWidget(QLabel("Range :"))
         self.range_spinbox = QDoubleSpinBox()
         self.range_spinbox.setRange(0.0, 10.0)
@@ -99,7 +142,7 @@ class MainWindow(QMainWindow):
         range_layout.addStretch()
         cpanel_layout.addLayout(range_layout)
         
-        # Frequency Control section
+        # Frequency Controls
         freq_layout.addWidget(QLabel("Frequency (Hz):"))
         self.freq_spinbox = QDoubleSpinBox()
         self.freq_spinbox.setRange(0.1, 10.0)
@@ -112,6 +155,44 @@ class MainWindow(QMainWindow):
         freq_layout.addWidget(self.freq_label)
         freq_layout.addStretch()
         cpanel_layout.addLayout(freq_layout)
+        
+        # Recording Controls
+        record_layout.addWidget(QLabel("Recording:"))
+        self.record_btn = QPushButton("Start Recording")
+        self.record_btn.clicked.connect(self.start_recording)
+        record_layout.addWidget(self.record_btn)
+        
+        self.stop_record_btn = QPushButton("Stop Recording")
+        self.stop_record_btn.clicked.connect(self.stop_recording)
+        self.stop_record_btn.setEnabled(False)
+        record_layout.addWidget(self.stop_record_btn)
+        
+        self.save_btn = QPushButton("Save Recording")
+        self.save_btn.clicked.connect(self.save_recording)
+        self.save_btn.setEnabled(False)
+        record_layout.addWidget(self.save_btn)
+        
+        self.load_btn = QPushButton("Load Recording")
+        self.load_btn.clicked.connect(self.load_recording)
+        record_layout.addWidget(self.load_btn)
+        
+        record_layout.addStretch()
+        cpanel_layout.addLayout(record_layout)
+        
+        # Playback Controls
+        playback_layout = QHBoxLayout()
+        self.play_btn = QPushButton("Play Recording")
+        self.play_btn.clicked.connect(self.play_recording)
+        self.play_btn.setEnabled(False)
+        playback_layout.addWidget(self.play_btn)
+        
+        self.stop_play_btn = QPushButton("Stop Playback")
+        self.stop_play_btn.clicked.connect(self.stop_playback)
+        self.stop_play_btn.setEnabled(False)
+        playback_layout.addWidget(self.stop_play_btn)
+        
+        playback_layout.addStretch()
+        cpanel_layout.addLayout(playback_layout)
 
         # Other Controls
         button_layout = QHBoxLayout()
@@ -126,6 +207,109 @@ class MainWindow(QMainWindow):
         
         control_group.setLayout(cpanel_layout)
         return control_group
+    
+    def start_recording(self):
+        self.recorded_times.clear()
+        self.recorded_values.clear()
+        self.is_recording = True
+        self.record_btn.setEnabled(False)
+        self.stop_record_btn.setEnabled(True)
+        self.save_btn.setEnabled(False)
+        self.statusBar().showMessage("Recording started...", 2000)
+
+    def stop_recording(self):
+        self.is_recording = False
+        self.record_btn.setEnabled(True)
+        self.stop_record_btn.setEnabled(False)
+        if len(self.recorded_times) > 0:
+            self.save_btn.setEnabled(True)
+            self.statusBar().showMessage(f"Recording stopped. {len(self.recorded_times)} points recorded.", 3000)
+        else:
+            self.statusBar().showMessage("Recording stopped. No data recorded.", 2000)
+
+    def save_recording(self):
+        if not self.recorded_times:
+            QMessageBox.warning(self, "No Data", "No recorded data to save!")
+            return
+        
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Recording", "", "JSON Files (*.json)")
+        if file_path:
+            data = {
+                'times': self.recorded_times,
+                'values': self.recorded_values,
+                'sampling_rate': self.sampling_rate
+            }
+            with open(file_path, 'w') as f:
+                json.dump(data, f)
+            self.statusBar().showMessage(f"Recording saved to {file_path}", 3000)
+
+    def load_recording(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Load Recording", "", "JSON Files (*.json)")
+        if file_path:
+            try:
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                self.recorded_times = data['times']
+                self.recorded_values = data['values']
+                self.play_btn.setEnabled(True)
+                self.statusBar().showMessage(f"Loaded {len(self.recorded_times)} points from {file_path}", 3000)
+                QMessageBox.information(self, "Load Successful", 
+                                       f"Loaded {len(self.recorded_times)} data points.\nClick 'Play Recording' to visualize.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to load file: {str(e)}")
+
+    def play_recording(self):
+        if not self.recorded_times:
+            QMessageBox.warning(self, "No Data", "No recorded data to play!")
+            return
+        self.timer.stop()
+        self.clear_data()
+        
+        # Start playback thread
+        self.is_playing_back = True
+        self.playback_thread = PlaybackThread(self.recorded_times, self.recorded_values)
+        self.playback_thread.data_chunk.connect(self.add_playback_point)
+        self.playback_thread.start()
+        
+        # Update button states
+        self.play_btn.setEnabled(False)
+        self.stop_play_btn.setEnabled(True)
+        self.record_btn.setEnabled(False)
+        self.freq_spinbox.setEnabled(False)
+        self.range_spinbox.setEnabled(False)
+        
+        self.statusBar().showMessage("Playing recording...", 2000)
+
+    def add_playback_point(self, time, value):
+        if len(self.time_list) >= self.max_points:
+            self.time_list.pop(0)
+            self.y_list.pop(0)
+        
+        self.time_list.append(time)
+        self.y_list.append(value)
+        self.sin_chart.plot_data(self.time_list, self.y_list, color='green')
+        self.update_frequency_domain()
+
+    def stop_playback(self):
+        if self.playback_thread:
+            self.playback_thread.stop()
+            self.playback_thread.wait()
+            self.playback_thread = None
+        
+        self.is_playing_back = False
+        self.time_list.clear()
+        self.y_list.clear()
+        self.timer.start(10)
+        
+        # Reset button states
+        self.play_btn.setEnabled(True)
+        self.stop_play_btn.setEnabled(False)
+        self.record_btn.setEnabled(True)
+        self.freq_spinbox.setEnabled(True)
+        self.range_spinbox.setEnabled(True)
+        
+        self.statusBar().showMessage("Playback stopped", 2000)
+
 
     def update_range(self, value):
         self.wave_range = value
