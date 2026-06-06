@@ -25,7 +25,7 @@ class PlaybackThread(QThread):
         self.start_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
         while self.is_playing and self.current_index < len(self.times):
             current_time = QDateTime.currentMSecsSinceEpoch() / 1000.0
-            elapsed = current_time - self.start_time
+            elapsed = self.times[0] + current_time - self.start_time
             
             # Find all points that should be displayed up to this time
             while (self.current_index < len(self.times) and 
